@@ -1,0 +1,2 @@
+spring.jms.servicebus.connection-string=<connection-string>
+baitando.sample.servicebus-queue.name=<queue-name>
