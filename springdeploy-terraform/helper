@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${SCRIPT_DIR}"
+
+function plan() {
+  tfdir=$1
+  echo "Running terraform plan from '${tfdir}'"
+  pushd "$tfdir" >/dev/null
+  terraform init
+  terraform plan "${@:2}"
+  popd >/dev/null
+}
+
+function apply() {
+  tfdir=$1
+  echo "Running terraform apply from '${tfdir}'"
+  pushd "$tfdir" >/dev/null
+  terraform init -upgrade
+  terraform apply -auto-approve "${@:2}"
+  popd >/dev/null
+}
+
+function goal_plan-cicd() {
+  env=$1
+  if [[ ${env} != "dev" ]]; then
+    echo -e "\n${RED}Please specify the ci environment. Only possible value is dev.${NC}\n"
+    exit 1
+  fi
+
+  plan "${PROJECT_DIR}/deployments/cicd/${env}"
+}
+
+function goal_apply-cicd() {
+  env=$1
+  if [[ ${env} != "dev" ]]; then
+    echo -e "\n${RED}Please specify the ci environment. Only possible value is dev.${NC}\n"
+    exit 1
+  fi
+
+  apply "${PROJECT_DIR}/deployments/cicd/${env}"
+}
+
+function goal_plan-app() {
+  env=$1
+  if [[ ${env} != "dev" ]]; then
+    echo -e "\n${RED}Please specify the build environment. Only possible value is dev.${NC}\n"
+    exit 1
+  fi
+
+  plan "${PROJECT_DIR}/deployments/app/${env}"
+}
+
+function goal_apply-app() {
+  env=$1
+  if [[ ${env} != "dev" ]]; then
+    echo -e "\n${RED}Please specify the build environment. Only possible value is dev.${NC}\n"
+    exit 1
+  fi
+
+  apply "${PROJECT_DIR}/deployments/app/${env}"
+}
+
+function goal_build() {
+  env=$1
+
+  rm -rf "${PROJECT_DIR}/dist"
+  mkdir -p "${PROJECT_DIR}/dist"
+
+  GOOS=linux go build -o "${PROJECT_DIR}/dist/main" "github.com/porsche/myaccess-apigee-metrics/cmd/main"
+
+  pushd "${PROJECT_DIR}/dist"
+  zip main.zip main
+  popd
+}
+
+function goal_test() {
+  env=$1
+
+  rm -rf "${PROJECT_DIR}/dist"
+  mkdir -p "${PROJECT_DIR}/dist"
+
+  go test ./...
+}
+
+function build_jar() {
+  "${PROJECT_DIR}"/mvnw clean package
+}
+
+function build_image() {
+  mkdir "${PROJECT_DIR}"/target/exploded
+  pushd "${PROJECT_DIR}"/target/exploded
+  jar -xf ../*.jar
+  popd
+
+  docker build -t sampleregistrydev.azurecr.io/azure-boot-sample:latest "${PROJECT_DIR}"
+}
+
+function push_image() {
+  docker push sampleregistrydev.azurecr.io/azure-boot-sample:latest
+}
+
+function publish() {
+  build_jar
+  build_image
+  push_image
+}
+
+function goal_publish() {
+  publish
+}
+
+if type -t "goal_$1" &>/dev/null; then
+  "goal_${1}" "${@:2}"
+else
+  echo -e "Usage: $0 <goal> \n"
+  exit 1
+fi

@@ -1,4 +1,4 @@
-package de.baitando.azure.samples.clearsbqueue.listener;
+package de.baitando.azure.samples.springfunction.listener;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
